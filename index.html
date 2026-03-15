@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Smart Sensory Play Planner</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { font-family: 'Nunito', sans-serif; -webkit-tap-highlight-color: transparent; }
+body { background: #FFF8F0; min-height: 100vh; }
+.gradient-header { background: linear-gradient(135deg, #FF8C42 0%, #FF6B8A 50%, #C084FC 100%); }
+.card { background: white; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.btn-primary { background: linear-gradient(135deg, #FF8C42, #FF6B8A); color: white; border: none; border-radius: 12px; font-weight: 700; min-height: 48px; transition: all 0.2s; }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(255,107,138,0.4); }
+.btn-primary:active { transform: translateY(0); }
+.btn-secondary { background: #F3E8FF; color: #7C3AED; border: none; border-radius: 12px; font-weight: 700; min-height: 44px; }
+.chip { display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 20px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 2px solid transparent; min-height: 36px; }
+.chip-unselected { background: #F3F4F6; color: #6B7280; }
+.chip-selected { background: #FFF0E6; color: #FF8C42; border-color: #FF8C42; }
+.chip-sensitivity { background: #FEE2E2; color: #DC2626; border-color: #DC2626; }
+.activity-card { border-left: 4px solid; border-radius: 12px; background: white; }
+.tab-active { border-bottom: 3px solid #FF8C42; color: #FF8C42; font-weight: 700; }
+.tab-inactive { border-bottom: 3px solid transparent; color: #9CA3AF; font-weight: 600; }
+input[type="range"] { -webkit-appearance: none; width: 100%; height: 8px; border-radius: 4px; background: #E5E7EB; outline: none; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: #FF8C42; cursor: pointer; }
+.fade-in { animation: fadeIn 0.3s ease-in; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.spinner { border: 3px solid #F3F4F6; border-top: 3px solid #FF8C42; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.day-pill { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+.day-active { background: linear-gradient(135deg, #FF8C42, #FF6B8A); color: white; }
+.day-inactive { background: #F3F4F6; color: #6B7280; }
+.star { cursor: pointer; font-size: 28px; transition: all 0.15s; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.modal-sheet { background: white; border-radius: 20px 20px 0 0; max-height: 85vh; overflow-y: auto; width: 100%; max-width: 480px; }
+.safety-badge { background: #FEF3C7; color: #92400E; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+.evidence-badge { background: #ECFDF5; color: #065F46; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div id="app" class="max-w-lg mx-auto pb-24">
+  <!-- Header -->
+  <div class="gradient-header px-5 pt-12 pb-6 text-white">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-extrabold">🌈 Sensory Play Planner</h1>
+        <p class="text-sm opacity-90 mt-1">Smart activities for little explorers</p>
+      </div>
+      <button onclick="showSettings()" class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-lg">⚙️</button>
+    </div>
+  </div>
+
+  <!-- Navigation Tabs -->
+  <div class="flex bg-white border-b sticky top-0 z-40">
+    <button onclick="switchTab('plan')" id="tab-plan" class="flex-1 py-3 text-center text-sm tab-active">📋 Plan</button>
+    <button onclick="switchTab('week')" id="tab-week" class="flex-1 py-3 text-center text-sm tab-inactive">📅 Week</button>
+    <button onclick="switchTab('history')" id="tab-history" class="flex-1 py-3 text-center text-sm tab-inactive">📊 History</button>
+  </div>
+
+  <!-- Plan Tab -->
+  <div id="view-plan" class="px-4 pt-4 space-y-4 fade-in">
+    <!-- Child Profile Quick Setup -->
+    <div id="onboarding-hint" class="card p-4 border-2 border-dashed border-orange-200">
+      <p class="text-sm font-semibold text-gray-700">👋 Welcome! Let's set up a child profile to get started.</p>
+      <button onclick="showProfileModal()" class="btn-primary w-full mt-3 text-sm px-4">+ Add Child Profile</button>
+    </div>
+
+    <!-- Active Profile -->
+    <div id="active-profile" class="card p-4 hidden">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-full bg-gradient-to-br from-orange-200 to-pink-200 flex items-center justify-center text-xl" id="profile-avatar">👶</div>
+          <div>
+            <p class="font-bold text-gray-800" id="profile-name-display">—</p>
+            <p class="text-xs text-gray-500" id="profile-age-display">—</p>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="showProfileModal()" class="text-xs btn-secondary px-3 py-1">Edit</button>
+          <button onclick="switchProfile()" class="text-xs btn-secondary px-3 py-1">Switch</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Session Settings -->
+    <div id="session-settings" class="card p-4 space-y-4 hidden">
+      <h3 class="font-bold text-gray-800">⏱️ Session Settings</h3>
+      
+      <div>
+        <label class="text-sm font-semibold text-gray-600 block mb-2">Duration: <span id="duration-display" class="text-orange-500">20 min</span></label>
+        <input type="range" min="5" max="60" step="5" value="20" id="duration-slider" oninput="updateDuration(this.value)">
+        <div class="flex justify-between text-xs text-gray-400 mt-1"><span>5 min</span><span>60 min</span></div>
+      </div>
+
+      <div>
+        <label class="text-sm font-semibold text-gray-600 block mb-2">Available Materials Today</label>
+        <div id="materials-chips" class="flex flex-wrap gap-2"></div>
+        <div class="flex mt-2 gap-2">
+          <input type="text" id="custom-material" placeholder="Add custom material..." class="flex-1 text-sm border rounded-lg px-3 py-2 min-h-[44px]" onkeypress="if(event.key==='Enter')addCustomMaterial()">
+          <button onclick="addCustomMaterial()" class="btn-secondary px-3 text-sm">+</button>
+        </div>
+      </div>
+
+      <button onclick="generatePlan()" class="btn-primary w-full text-base py-3" id="generate-btn">
+        ✨ Generate Today's Plan
+      </button>
+    </div>
+
+    <!-- Generated Plan -->
+    <div id="plan-result" class="space-y-3 hidden"></div>
+  </div>
+
+  <!-- Week Tab -->
+  <div id="view-week" class="px-4 pt-4 space-y-4 hidden fade-in">
+    <div class="card p-4">
+      <h3 class="font-bold text-gray-800 mb-3">📅 Weekly Schedule</h3>
+      <div class="flex gap-2 justify-between mb-4" id="week-days"></div>
+      <div id="week-plan-display" class="space-y-3">
+        <p class="text-sm text-gray-400 text-center py-6">Select a day or generate a weekly plan below</p>
+      </div>
+    </div>
+    <button onclick="generateWeekPlan()" id="week-gen-btn" class="btn-primary w-full text-sm py-3">🗓️ Generate Full Week Plan</button>
+  </div>
+
+  <!-- History Tab -->
+  <div id="view-history" class="px-4 pt-4 space-y-4 hidden fade-in">
+    <div class="card p-4">
+      <h3 class="font-bold text-gray-800 mb-2">📊 Engagement Insights</h3>
+      <div id="insights-display" class="text-sm text-gray-500">
+        <p class="py-4 text-center">Complete some sessions to see insights! 🌟</p>
+      </div>
+    </div>
+    <div id="history-list" class="space-y-3"></div>
+  </div>
+</div>
+
+<!-- Profile Modal -->
+<div id="profile-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeProfileModal()">
+  <div class="modal-sheet p-5 space-y-4">
+    <div class="flex justify-between items-center">
+      <h2 class="text-lg font-bold text-gray-800">👶 Child Profile</h2>
+      <button onclick="closeProfileModal()" class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">✕</button>
+    </div>
+    
+    <div>
+      <label class="text-sm font-semibold text-gray-600 block mb-1">Child's Name</label>
+      <input type="text" id="child-name" placeholder="e.g. Emma" class="w-full border rounded-lg px-3 py-2 min-h-[44px]">
+    </div>
+
+    <div>
+      <label class="text-sm font-semibold text-gray-600 block mb-1">Age (months)</label>
+      <input type="number" id="child-age" placeholder="e.g. 24" min="6" max="72" class="w-full border rounded-lg px-3 py-2 min-h-[44px]">
+    </div>
+
+    <div>
+      <label class="text-sm font-semibold text-gray-600 block mb-2">Sensory Preferences (loves ❤️)</label>
+      <div class="flex flex-wrap gap-2" id="pref-chips"></div>
+    </div>
+
+    <div>
+      <label class="text-sm font-semibold text-gray-600 block mb-2">Sensory Sensitivities (avoid ⚠️)</label>
+      <div class="flex flex-wrap gap-2" id="sens-chips"></div>
+    </div>
+
+    <div>
+      <label class="text-sm font-semibold text-gray-600 block mb-1">Setting</label>
+      <select id="child-setting" class="w-full border rounded-lg px-3 py-2 min-h-[44px]">
+        <option value="home">🏠 Home</option>
+        <option value="home_daycare">🏡 Home Daycare</option>
+        <option value="center">🏫 Childcare Center</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="text-sm font-semibold text-gray-600 block mb-1">Notes (allergies, special needs, etc.)</label>
+      <textarea id="child-notes" placeholder="e.g. Peanut allergy, loves music..." class="w-full border rounded-lg px-3 py-2 text-sm" rows="2"></textarea>
+    </div>
+
+    <button onclick="saveProfile()" class="btn-primary w-full py-3">💾 Save Profile</button>
+  </div>
+</div>
+
+<!-- Feedback Modal -->
+<div id="feedback-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeFeedbackModal()">
+  <div class="modal-sheet p-5 space-y-4">
+    <h2 class="text-lg font-bold text-gray-800">⭐ How did it go?</h2>
+    <p class="text-sm text-gray-500" id="feedback-activity-name"></p>
+    
+    <div>
+      <label class="text-sm font-semibold text-gray-600 block mb-2">Engagement Level</label>
+      <div class="flex gap-1 justify-center" id="star-rating"></div>
+    </div>
+
+    <div>
+      <label class="text-sm font-semibold text-gray-600 block mb-1">Quick Notes</label>
+      <textarea id="feedback-notes" placeholder="What worked? What didn't?" class="w-full border rounded-lg px-3 py-2 text-sm" rows="2"></textarea>
+    </div>
+
+    <button onclick="saveFeedback()" class="btn-primary w-full py-3">Save Feedback</button>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settings-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeSettings()">
+  <div class="modal-sheet p-5 space-y-4">
+    <div class="flex justify-between items-center">
+      <h2 class="text-lg font-bold text-gray-800">⚙️ Settings</h2>
+      <button onclick="closeSettings()" class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">✕</button>
+    </div>
+    <div id="profiles-list" class="space-y-2"></div>
+    <button onclick="closeSettings();showProfileModal()" class="btn-secondary w-full py-3 text-sm">+ Add New Child Profile</button>
+    <hr>
+    <button onclick="clearAllData()" class="w-full py-3 text-sm text-red-500 font-semibold">🗑️ Clear All Data</button>
+  </div>
+</div>
+
+<script>
+// Global AI tracking
+window.aiTotalInputTokens = 0;
+window.aiTotalOutputTokens = 0;
+window.aiTotalTime = 0;
+window.aiTimeByAlias = {};
+
+// State
+let state = {
+  profiles: [],
+  activeProfileId: null,
+  sessionDuration: 20,
+  selectedMaterials: [],
+  currentPlan: null,
+  weekPlans: {},
+  history: [],
+  feedbackData: {}
+};
+
+const SENSORY_TYPES = [
+  { id: 'tactile', label: '🤲 Tactile', color: '#FF8C42' },
+  { id: 'visual', label: '👀 Visual', color: '#3B82F6' },
+  { id: 'auditory', label: '👂 Auditory', color: '#8B5CF6' },
+  { id: 'vestibular', label: '🔄 Vestibular', color: '#10B981' },
+  { id: 'proprioceptive', label: '💪 Proprioceptive', color: '#EF4444' },
+  { id: 'olfactory', label: '👃 Olfactory', color: '#F59E0B' },
+  { id: 'gustatory', label: '👅 Gustatory', color: '#EC4899' }
+];
+
+const COMMON_MATERIALS = [
+  'Water', 'Rice', 'Pasta', 'Playdough', 'Sand', 'Bubbles', 'Paint', 'Ice',
+  'Fabric scraps', 'Shaving cream', 'Cotton balls', 'Cardboard boxes',
+  'Cups & containers', 'Spoons', 'Bells/shakers', 'Feathers', 'Sponges', 'Tape'
+];
+
+const ACTIVITY_COLORS = ['#FF8C42', '#3B82F6', '#8B5CF6', '#10B981', '#EF4444', '#F59E0B'];
+
+// Load state
+function loadState() {
+  try {
+    const saved = localStorage.getItem('sensory-planner-state');
+    if (saved) {
+      state = { ...state, ...JSON.parse(saved) };
+    }
+  } catch(e) { console.error('Load error:', e); }
+}
+
+function saveState() {
+  try {
+    localStorage.setItem('sensory-planner-state', JSON.stringify(state));
+  } catch(e) { console.error('Save error:', e); }
+}
+
+// AI Call helper
+async function callAI(prompt, retries = 3) {
+  const start = Date.now();
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await fetch('https://16504442930.work/run_prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          alias: 'genericAI',
+          params: { prompt }
+        })
+      });
+      const data = await res.json();
+      const elapsed = Date.now() - start;
+      window.aiTotalTime += elapsed;
+      window.aiTimeByAlias['genericAI'] = (window.aiTimeByAlias['genericAI'] || 0) + elapsed;
+      if (data.input_tokens) window.aiTotalInputTokens += data.input_tokens;
+      if (data.output_tokens) window.aiTotalOutputTokens += data.output_tokens;
+      if (data.error) {
+        if (attempt < retries - 1) continue;
+        const friendly = await formatError(data);
+        throw new Error(friendly);
+      }
+      return data;
+    } catch(e) {
+      if (attempt === retries - 1) throw e;
+    }
+  }
+}
+
+async function formatError(apiResponse) {
+  try {
+    const res = await callAI(`Reformat this API error into a friendly, helpful message for a non-technical parent or caregiver. Include what they can do to fix it. Also include the full original error for reference. Original error: ${JSON.stringify(apiResponse)}. Return JSON with key "message" as a string.`, 1);
+    return res.message || 'Something went wrong. Please try again in a moment.';
+  } catch(e) {
+    return `Oops! Something didn't work right. Please try again. (Details: ${JSON.stringify(apiResponse)})`;
+  }
+}
+
+// UI Functions
+function switchTab(tab) {
+  ['plan', 'week', 'history'].forEach(t => {
+    document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tab);
+    document.getElementById(`tab-${t}`).className = `flex-1 py-3 text-center text-sm ${t === tab ? 'tab-active' : 'tab-inactive'}`;
+  });
+  if (tab === 'week') renderWeekView();
+  if (tab === 'history') renderHistory();
+}
+
+function showProfileModal(profileId = null) {
+  document.getElementById('profile-modal').classList.remove('hidden');
+  const profile = profileId ? state.profiles.find(p => p.id === profileId) : null;
+  document.getElementById('child-name').value = profile?.name || '';
+  document.getElementById('child-age').value = profile?.ageMonths || '';
+  document.getElementById('child-setting').value = profile?.setting || 'home';
+  document.getElementById('child-notes').value = profile?.notes || '';
+  document.getElementById('profile-modal').dataset.editId = profileId || '';
+  
+  renderSensoryChips('pref-chips', profile?.preferences || [], false);
+  renderSensoryChips('sens-chips', profile?.sensitivities || [], true);
+}
+
+function closeProfileModal() {
+  document.getElementById('profile-modal').classList.add('hidden');
+}
+
+function renderSensoryChips(containerId, selected, isSensitivity) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = SENSORY_TYPES.map(s => {
+    const isSelected = selected.includes(s.id);
+    const cls = isSelected ? (isSensitivity ? 'chip-sensitivity' : 'chip-selected') : 'chip-unselected';
+    return `<span class="chip ${cls}" data-id="${s.id}" onclick="toggleSensoryChip('${containerId}', '${s.id}', ${isSensitivity})">${s.label}</span>`;
+  }).join('');
+}
+
+function toggleSensoryChip(containerId, id, isSensitivity) {
+  const container = document.getElementById(containerId);
+  const chip = container.querySelector(`[data-id="${id}"]`);
+  const wasSelected = chip.classList.contains('chip-selected') || chip.classList.contains('chip-sensitivity');
+  if (wasSelected) {
+    chip.className = `chip chip-unselected`;
+  } else {
+    chip.className = `chip ${isSensitivity ? 'chip-sensitivity' : 'chip-selected'}`;
+  }
+}
+
+function getSelectedChips(containerId) {
+  const container = document.getElementById(containerId);
+  return Array.from(container.querySelectorAll('.chip-selected, .chip-sensitivity')).map(c => c.dataset.id);
+}
+
+function saveProfile() {
+  const name = document.getElementById('child-name').value.trim();
+  const ageMonths = parseInt(document.getElementById('child-age').value);
+  const setting = document.getElementById('child-setting').value;
+  const notes = document.getElementById('child-notes').value.trim();
+  const preferences = getSelectedChips('pref-chips');
+  const sensitivities = getSelectedChips('sens-chips');
+
+  if (!name) { alert('Please enter a name 😊'); return; }
+  if (!ageMonths || ageMonths < 6 || ageMonths > 72) { alert('Please enter age between 6-72 months'); return; }
+
+  const editId = document.getElementById('profile-modal').dataset.editId;
+  if (editId) {
+    const idx = state.profiles.findIndex(p => p.id === editId);
+    if (idx >= 0) {
+      state.profiles[idx] = { ...state.profiles[idx], name, ageMonths, setting, notes, preferences, sensitivities };
+    }
+  } else {
+    const profile = { id: Date.now().toString(), name, ageMonths, setting, notes, preferences, sensitivities };
+    state.profiles.push(profile);
+    state.activeProfileId = profile.id;
+  }
+
+  saveState();
+  closeProfileModal();
+  renderApp();
+}
+
+function getActiveProfile() {
+  return state.profiles.find(p => p.id === state.activeProfileId);
+}
+
+function renderMaterialChips() {
+  const container = document.getElementById('materials-chips');
+  const allMaterials = [...new Set([...COMMON_MATERIALS, ...(state.selectedMaterials.filter(m => !COMMON_MATERIALS.includes(m)))])];
+  container.innerHTML = allMaterials.map(m => {
+    const isSelected = state.selectedMaterials.includes(m);
+    return `<span class="chip ${isSelected ? 'chip-selected' : 'chip-unselected'}" onclick="toggleMaterial('${m.replace(/'/g, "\\'")}')">${m}</span>`;
+  }).join('');
+}
+
+function toggleMaterial(m) {
+  const idx = state.selectedMaterials.indexOf(m);
+  if (idx >= 0) state.selectedMaterials.splice(idx, 1);
+  else state.selectedMaterials.push(m);
+  saveState();
+  renderMaterialChips();
+}
+
+function addCustomMaterial() {
+  const input = document.getElementById('custom-material');
+  const val = input.value.trim();
+  if (val && !state.selectedMaterials.includes(val)) {
+    state.selectedMaterials.push(val);
+    saveState();
+    renderMaterialChips();
+  }
+  input.value = '';
+}
+
+function updateDuration(val) {
+  state.sessionDuration = parseInt(val);
+  document.getElementById('duration-display').textContent = val + ' min';
+  saveState();
+}
+
+function renderApp() {
+  const profile = getActiveProfile();
+  const hasProfile = !!profile;
+  
+  document.getElementById('onboarding-hint').classList.toggle('hidden', hasProfile);
+  document.getElementById('active-profile').classList.toggle('hidden', !hasProfile);
+  document.getElementById('session-settings').classList.toggle('hidden', !hasProfile);
+
+  if (hasProfile) {
+    const ageYears = Math.floor(profile.ageMonths / 12);
+    const ageRemMonths = profile.ageMonths % 12;
+    const ageStr = ageYears > 0 ? `${ageYears}y ${ageRemMonths}m` : `${profile.ageMonths}m`;
+    const settingLabels = { home: '🏠 Home', home_daycare: '🏡 Home Daycare', center: '🏫 Center' };
+
+    document.getElementById('profile-name-display').textContent = profile.name;
+    document.getElementById('profile-age-display').textContent = `${ageStr} · ${settingLabels[profile.setting] || profile.setting}`;
+    
+    const avatars = ['👶', '👧', '👦', '🧒'];
+    document.getElementById('profile-avatar').textContent = avatars[state.profiles.indexOf(profile) % avatars.length];
+
+    document.getElementById('duration-slider').value = state.sessionDuration;
+    document.getElementById('duration-display').textContent = state.sessionDuration + ' min';
+    renderMaterialChips();
+  }
+
+  if (state.currentPlan) {
+    renderPlan(state.currentPlan);
+  }
+}
+
+async function generatePlan() {
+  const profile = getActiveProfile();
+  if (!profile) return;
+  if (state.selectedMaterials.length === 0) {
+    alert('Please select at least one material you have available! 📦');
+    return;
+  }
+
+  const btn = document.getElementById('generate-btn');
+  btn.innerHTML = '<span class="spinner"></span> Generating...';
+  btn.disabled = true;
+
+  const feedbackContext = buildFeedbackContext(profile.id);
+
+  const prompt = `You are an expert early childhood occupational therapist and sensory play specialist. Generate a sensory play session plan.
+
+CHILD PROFILE:
+- Name: ${profile.name}
+- Age: ${profile.ageMonths} months
+- Setting: ${profile.setting}
+- Sensory preferences (enjoys): ${profile.preferences.join(', ') || 'none specified'}
+- Sensory sensitivities (avoid/be careful): ${profile.sensitivities.join(', ') || 'none specified'}
+- Special notes: ${profile.notes || 'none'}
+
+SESSION CONSTRAINTS:
+- Total duration: ${state.sessionDuration} minutes
+- Available materials: ${state.selectedMaterials.join(', ')}
+- IMPORTANT: Only use the listed materials. No shopping needed.
+
+${feedbackContext ? `PAST FEEDBACK (use to personalize):
+${feedbackContext}` : ''}
+
+Generate a structured sensory play session with 3-5 sequential activities that:
+1. Start with calming/regulation activity
+2. Build to more stimulating activities
+3. End with a calming wind-down
+4. Avoid activities that heavily target the child's sensitivities
+5. Favor activities targeting the child's preferences
+6. Use ONLY the available materials listed
+7. Include specific developmental goals for each activity
+8. Include evidence-based rationale for each activity
+9. Include safety notes specific to the child's age and setting
+
+Return EXACTLY this JSON structure:
+{
+  "sessionTitle": string (creative fun name for this session),
+  "totalMinutes": number,
+  "activities": [
+    {
+      "name": string (fun creative activity name),
+      "description": string (2-3 sentences explaining the activity step by step),
+      "durationMinutes": number,
+      "sensoryTypes": string[] (from: tactile, visual, auditory, vestibular, proprioceptive, olfactory, gustatory),
+      "materials": string[] (subset of available materials used),
+      "developmentalGoal": string (specific developmental goal),
+      "evidenceRationale": string (brief evidence-based reason this activity helps),
+      "safetyNotes": string (age and setting appropriate safety tips),
+      "intensityLevel": string (one of: "calming", "moderate", "stimulating"),
+      "variation": string (an alternative way to do this without any extra materials)
+    }
+  ],
+  "sessionTips": string (overall tips for the caregiver),
+  "regulationStrategy": string (what to do if the child becomes overwhelmed)
+}`;
+
+  try {
+    const result = await callAI(prompt);
+    state.currentPlan = result;
+    state.currentPlan._date = new Date().toISOString().split('T')[0];
+    state.currentPlan._profileId = profile.id;
+    saveState();
+    renderPlan(result);
+  } catch(e) {
+    alert(e.message || 'Failed to generate plan. Please try again.');
+  } finally {
+    btn.innerHTML = '✨ Generate Today\'s Plan';
+    btn.disabled = false;
+  }
+}
+
+function buildFeedbackContext(profileId) {
+  const feedback = Object.values(state.feedbackData).filter(f => f.profileId === profileId);
+  if (feedback.length === 0) return '';
+  
+  const recent = feedback.slice(-10);
+  return recent.map(f => {
+    const stars = f.rating;
+    return `- "${f.activityName}": ${stars}/5 stars${f.notes ? `, notes: "${f.notes}"` : ''}`;
+  }).join('\n');
+}
+
+function renderPlan(plan) {
+  const container = document.getElementById('plan-result');
+  container.classList.remove('hidden');
+  
+  let html = `
+    <div class="card p-4 fade-in">
+      <h2 class="text-lg font-bold text-gray-800">${plan.sessionTitle || 'Today\'s Session'}</h2>
+      <p class="text-sm text-gray-500">⏱️ ${plan.totalMinutes} minutes · ${plan.activities?.length || 0} activities</p>
+    </div>
+  `;
+
+  if (plan.activities) {
+    plan.activities.forEach((act, i) => {
+      const color = ACTIVITY_COLORS[i % ACTIVITY_COLORS.length];
+      const intensityEmoji = { calming: '🌊', moderate: '🌤️', stimulating: '⚡' };
+      const sensoryBadges = (act.sensoryTypes || []).map(s => {
+        const type = SENSORY_TYPES.find(t => t.id === s);
+        return type ? `<span class="text-xs bg-gray-100 rounded-full px-2 py-0.5">${type.label}</span>` : '';
+      }).join('');
+
+      html += `
+        <div class="activity-card p-4 fade-in" style="border-left-color: ${color}; animation-delay: ${i * 0.1}s">
+          <div class="flex justify-between items-start mb-2">
+            <div>
+              <span class="text-xs font-bold text-gray-400">ACTIVITY ${i + 1}</span>
+              <h3 class="font-bold text-gray-800">${act.name}</h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs bg-gray-100 rounded-full px-2 py-1">${intensityEmoji[act.intensityLevel] || '🌤️'} ${act.durationMinutes}m</span>
+              <button onclick="openFeedback(${i})" class="text-lg" title="Rate this activity">⭐</button>
+            </div>
+          </div>
+          <p class="text-sm text-gray-600 mb-2">${act.description}</p>
+          <div class="flex flex-wrap gap-1 mb-2">${sensoryBadges}</div>
+          <div class="flex flex-wrap gap-1 mb-2">
+            ${(act.materials || []).map(m => `<span class="text-xs bg-orange-50 text-orange-600 rounded px-2 py-0.5">📦 ${m}</span>`).join('')}
+          </div>
+          <div class="space-y-1">
+            <div class="evidence-badge text-xs">🧠 <strong>Goal:</strong> ${act.developmentalGoal}</div>
+            <div class="evidence-badge text-xs">📚 <strong>Why it works:</strong> ${act.evidenceRationale}</div>
+            ${act.safetyNotes ? `<div class="safety-badge text-xs">⚠️ <strong>Safety:</strong> ${act.safetyNotes}</div>` : ''}
+            <details class="text-xs text-gray-500 mt-1">
+              <summary class="cursor-pointer font-semibold">🔄 No-shop variation</summary>
+              <p class="mt-1 pl-2">${act.variation}</p>
+            </details>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  if (plan.sessionTips) {
+    html += `<div class="card p-4 fade-in"><p class="text-sm text-gray-600">💡 <strong>Tips:</strong> ${plan.sessionTips}</p></div>`;
+  }
+  if (plan.regulationStrategy) {
+    html += `<div class="card p-4 fade-in border-l-4 border-blue-300"><p class="text-sm text-blue-700">🧘 <strong>If overwhelmed:</strong> ${plan.regulationStrategy}</p></div>`;
+  }
+
+  html += `<button onclick="savePlanToHistory()" class="btn-secondary w-full py-3 text-sm">✅ Mark Session Complete & Log</button>`;
+
+  container.innerHTML = html;
+}
+
+// Feedback
+let currentFeedbackActivityIndex = -1;
+let currentFeedbackRating = 0;
+
+function openFeedback(activityIndex) {
+  currentFeedbackActivityIndex = activityIndex;
+  currentFeedbackRating = 0;
+  const act = state.currentPlan?.activities?.[activityIndex];
+  if (!act) return;
+  
+  document.getElementById('feedback-activity-name').textContent = act.name;
+  document.getElementById('feedback-notes').value = '';
+  renderStars(0);
+  document.getElementById('feedback-modal').classList.remove('hidden');
+}
+
+function closeFeedbackModal() {
+  document.getElementById('feedback-modal').classList.add('hidden');
+}
+
+function renderStars(rating) {
+  const container = document.getElementById('star-rating');
+  container.innerHTML = [1,2,3,4,5].map(i => 
+    `<span class="star" onclick="setRating(${i})">${i <= rating ? '⭐' : '☆'}</span>`
+  ).join('');
+}
+
+function setRating(r) {
+  currentFeedbackRating = r;
+  renderStars(r);
+}
+
+function saveFeedback() {
+  if (currentFeedbackRating === 0) { alert('Please tap a star to rate! ⭐'); return; }
+  const act = state.currentPlan?.activities?.[currentFeedbackActivityIndex];
+  if (!act) return;
+
+  const feedbackId = Date.now().toString();
+  state.feedbackData[feedbackId] = {
+    profileId: state.activeProfileId,
+    activityName: act.name,
+    sensoryTypes: act.sensoryTypes,
+    rating: currentFeedbackRating,
+    notes: document.getElementById('feedback-notes').value.trim(),
+    date: new Date().toISOString()
+  };
+  saveState();
+  closeFeedbackModal();
+  alert('Feedback saved! 🎉 Future plans will be even better.');
+}
+
+function savePlanToHistory() {
+  if (!state.currentPlan) return;
+  state.history.push({
+    id: Date.now().toString(),
+    date: new Date().toISOString(),
+    profileId: state.activeProfileId,
+    plan: { ...state.currentPlan }
+  });
+  saveState();
+  alert('Session logged! 📊 Check the History tab for insights.');
+}
+
+// Week View
+function renderWeekView() {
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const today = new Date();
+  const currentDay = (today.getDay() + 6) % 7;
+  
+  const container = document.getElementById('week-days');
+  container.innerHTML = days.map((d, i) => {
+    const hasData = !!state.weekPlans[d];
+    return `<div class="day-pill ${i === currentDay ? 'day-active' : (hasData ? 'day-inactive bg-green-100' : 'day-inactive')}" onclick="selectDay('${d}')">${d}</div>`;
+  }).join('');
+
+  const selectedDay = days[currentDay];
+  selectDay(selectedDay);
+}
+
+function selectDay(day) {
+  const display = document.getElementById('week-plan-display');
+  const plan = state.weekPlans[day];
+  if (plan) {
+    let html = `<h4 class="font-bold text-gray-800">${plan.sessionTitle || day}</h4>`;
+    (plan.activities || []).forEach((act, i) => {
+      const color = ACTIVITY_COLORS[i % ACTIVITY_COLORS.length];
+      html += `
+        <div class="activity-card p-3 text-sm" style="border-left-color: ${color}">
+          <div class="flex justify-between">
+            <span class="font-semibold">${act.name}</span>
+            <span class="text-xs text-gray-400">${act.durationMinutes}m</span>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">${act.description}</p>
+        </div>
+      `;
+    });
+    display.innerHTML = html;
+  } else {
+    display.innerHTML = `<p class="text-sm text-gray-400 text-center py-6">No plan for ${day} yet</p>`;
+  }
+}
+
+async function generateWeekPlan() {
+  const profile = getActiveProfile();
+  if (!profile) { alert('Please set up a child profile first! 👶'); return; }
+  if (state.selectedMaterials.length === 0) { alert('Please select materials on the Plan tab first! 📦'); return; }
+
+  const btn = document.getElementById('week-gen-btn');
+  btn.innerHTML = '<span class="spinner"></span> Generating week...';
+  btn.disabled = true;
+
+  const feedbackContext = buildFeedbackContext(profile.id);
+
+  const prompt = `You are an expert early childhood sensory play specialist. Generate a FULL 5-day (Mon-Fri) sensory play schedule.
+
+CHILD PROFILE:
+- Name: ${profile.name}, Age: ${profile.ageMonths} months, Setting: ${profile.setting}
+- Preferences: ${profile.preferences.join(', ') || 'none'}
+- Sensitivities: ${profile.sensitivities.join(', ') || 'none'}
+- Notes: ${profile.notes || 'none'}
+
+CONSTRAINTS:
+- Duration per session: ${state.sessionDuration} minutes
+- Available materials: ${state.selectedMaterials.join(', ')}
+- Only use listed materials
+
+${feedbackContext ? `PAST FEEDBACK:\n${feedbackContext}` : ''}
+
+OPTIMIZATION GOALS:
+1. Balance sensory types across the week (don't repeat same type daily)
+2. Alternate between high-stimulation and calming days
+3. Build skills progressively through the week
+4. Ensure variety in activities (no repetition)
+5. Each day has 3-4 activities
+
+Return EXACTLY this JSON structure:
+{
+  "weekPlan": {
+    "Mon": {
+      "sessionTitle": string,
+      "totalMinutes": number,
+      "activities": [
+        {
+          "name": string,
+          "description": string,
+          "durationMinutes": number,
+          "sensoryTypes": string[],
+          "materials": string[],
+          "developmentalGoal": string,
+          "evidenceRationale": string,
+          "safetyNotes": string,
+          "intensityLevel": string,
+          "variation": string
+        }
+      ]
+    },
+    "Tue": { same structure },
+    "Wed": { same structure },
+    "Thu": { same structure },
+    "Fri": { same structure }
+  },
+  "weeklyTheme": string (fun thematic name for the week),
+  "weeklyGoals": string (overall developmental goals for the week)
+}`;
+
+  try {
+    const result = await callAI(prompt);
+    if (result.weekPlan) {
+      state.weekPlans = result.weekPlan;
+      saveState();
+      renderWeekView();
+      alert(`🌈 Week plan "${result.weeklyTheme || 'ready'}" generated!\n\n${result.weeklyGoals || ''}`);
+    }
+  } catch(e) {
+    alert(e.message || 'Failed to generate weekly plan. Please try again.');
+  } finally {
+    btn.innerHTML = '🗓️ Generate Full Week Plan';
+    btn.disabled = false;
+  }
+}
+
+// History
+function renderHistory() {
+  const container = document.getElementById('history-list');
+  const insights = document.getElementById('insights-display');
+  
+  const profileHistory = state.history.filter(h => h.profileId === state.activeProfileId);
+  const profileFeedback = Object.values(state.feedbackData).filter(f => f.profileId === state.activeProfileId);
+
+  if (profileFeedback.length > 0) {
+    const avgRating = (profileFeedback.reduce((s, f) => s + f.rating, 0) / profileFeedback.length).toFixed(1);
+    const sensoryCounts = {};
+    profileFeedback.forEach(f => {
+      (f.sensoryTypes || []).forEach(s => {
+        if (!sensoryCounts[s]) sensoryCounts[s] = { total: 0, sum: 0 };
+        sensoryCounts[s].total++;
+        sensoryCounts[s].sum += f.rating;
+      });
+    });
+
+    let bestType = '';
+    let bestAvg = 0;
+    Object.entries(sensoryCounts).forEach(([type, data]) => {
+      const avg = data.sum / data.total;
+      if (avg > bestAvg) { bestAvg = avg; bestType = type; }
+    });
+
+    const bestLabel = SENSORY_TYPES.find(s => s.id === bestType)?.label || bestType;
+
+    insights.innerHTML = `
+      <div class="grid grid-cols-3 gap-3 text-center">
+        <div class="bg-orange-50 rounded-lg p-3">
+          <p class="text-2xl font-bold text-orange-500">${profileHistory.length}</p>
+          <p class="text-xs text-gray-500">Sessions</p>
+        </div>
+        <div class="bg-yellow-50 rounded-lg p-3">
+          <p class="text-2xl font-bold text-yellow-500">${avgRating}⭐</p>
+          <p class="text-xs text-gray-500">Avg Rating</p>
+        </div>
+        <div class="bg-green-50 rounded-lg p-3">
+          <p class="text-lg font-bold text-green-500">${bestLabel}</p>
+          <p class="text-xs text-gray-500">Favorite</p>
+        </div>
+      </div>
+    `;
+  }
+
+  if (profileHistory.length === 0) {
+    container.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">No completed sessions yet</p>';
+    return;
+  }
+
+  container.innerHTML = profileHistory.slice().reverse().slice(0, 20).map(h => {
+    const date = new Date(h.date).toLocaleDateString();
+    return `
+      <div class="card p-3">
+        <div class="flex justify-between items-center">
+          <div>
+            <p class="font-semibold text-sm text-gray-800">${h.plan?.sessionTitle || 'Session'}</p>
+            <p class="text-xs text-gray-400">${date} · ${h.plan?.totalMinutes || '?'}min</p>
+          </div>
+          <span class="text-xs bg-green-100 text-green-600 rounded-full px-2 py-1">✅ Done</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Settings
+function showSettings() {
+  document.getElementById('settings-modal').classList.remove('hidden');
+  const container = document.getElementById('profiles-list');
+  container.innerHTML = state.profiles.map(p => {
+    const isActive = p.id === state.activeProfileId;
+    return `
+      <div class="flex items-center justify-between p-3 rounded-lg ${isActive ? 'bg-orange-50 border border-orange-200' : 'bg-gray-50'}">
+        <div>
+          <p class="font-semibold text-sm">${p.name} ${isActive ? '✓' : ''}</p>
+          <p class="text-xs text-gray-500">${p.ageMonths}m</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="setActiveProfile('${p.id}')" class="text-xs btn-secondary px-2 py-1">Select</button>
+          <button onclick="deleteProfile('${p.id}')" class="text-xs text-red-400 px-2 py-1">🗑️</button>
+        </div>
+      </div>
+    `;
+  }).join('') || '<p class="text-sm text-gray-400 text-center py-2">No profiles yet</p>';
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal').classList.add('hidden');
+}
+
+function setActiveProfile(id) {
+  state.activeProfileId = id;
+  state.currentPlan = null;
+  document.getElementById('plan-result').classList.add('hidden');
+  saveState();
+  closeSettings();
+  renderApp();
+}
+
+function switchProfile() {
+  showSettings();
+}
+
+function deleteProfile(id) {
+  if (!confirm('Delete this profile?')) return;
+  state.profiles = state.profiles.filter(p => p.id !== id);
+  if (state.activeProfileId === id) {
+    state.activeProfileId = state.profiles[0]?.id || null;
+  }
+  saveState();
+  showSettings();
+  renderApp();
+}
+
+function clearAllData() {
+  if (!confirm('This will delete ALL data. Are you sure?')) return;
+  localStorage.removeItem('sensory-planner-state');
+  state = { profiles: [], activeProfileId: null, sessionDuration: 20, selectedMaterials: [], currentPlan: null, weekPlans: {}, history: [], feedbackData: {} };
+  closeSettings();
+  renderApp();
+}
+
+// Init
+loadState();
+renderApp();
+</script>
+</body>
+</html>
